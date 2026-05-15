@@ -90,7 +90,7 @@ frappe.ui.form.on('Passport Movement', {
 
 function _check_active_in(frm) {
     frappe.call({
-        method: 'passport_management.doctype.passport_movement.passport_movement.get_active_in_record',
+        method: 'passport_management.passport_management.doctype.passport_movement.passport_movement.get_active_in_record',
         args: { employee: frm.doc.employee },
         callback(r) {
             if (!r.message) {

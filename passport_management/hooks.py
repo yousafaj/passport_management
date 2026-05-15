@@ -11,9 +11,9 @@ app_logo_url = "/assets/passport_management/images/passport_logo.svg"
 # Document Events
 doc_events = {
     "Passport Movement": {
-        "validate":  "passport_management.doctype.passport_movement.passport_movement.validate",
-        "on_submit": "passport_management.doctype.passport_movement.passport_movement.on_submit",
-        "on_cancel": "passport_management.doctype.passport_movement.passport_movement.on_cancel",
+        "validate":  "passport_management.passport_management.doctype.passport_movement.passport_movement.validate",
+        "on_submit": "passport_management.passport_management.doctype.passport_movement.passport_movement.on_submit",
+        "on_cancel": "passport_management.passport_management.doctype.passport_movement.passport_movement.on_cancel",
     }
 }
 
