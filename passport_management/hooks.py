@@ -12,6 +12,11 @@ app_logo_url = "/assets/passport_management/images/passport_logo.svg"
 after_install = "passport_management.install.after_install"
 after_migrate = "passport_management.install.after_migrate"
 
+# Add a "Passport Management" section to the Employee form's Connections panel
+override_doctype_dashboards = {
+    "Employee": "passport_management.passport_management.employee_dashboard.get_dashboard_data"
+}
+
 # Scheduled Tasks
 scheduler_events = {
     "daily": [
