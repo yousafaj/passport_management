@@ -40,7 +40,9 @@ class PassportMovement(Document):
             self.received_by = frappe.session.user
 
     def _sync_naming_series(self):
-        """Keep naming_series aligned with movement_type for Document Naming Rules."""
+        """Keep naming_series aligned with movement_type — only at creation time."""
+        if not self.is_new():
+            return
         series_map = {"In": "PM-IN-.YYYY.-.#####", "Out": "PM-OUT-.YYYY.-.#####"}
         if self.movement_type in series_map:
             self.naming_series = series_map[self.movement_type]
@@ -124,26 +126,31 @@ class PassportMovement(Document):
         )
         if active_in:
             frappe.db.set_value("Passport Movement", active_in, "is_active_record", 0)
+            frappe.db.set_value("Passport Movement", self.name, "linked_in_record", active_in)
+            self.linked_in_record = active_in
 
     def _reactivate_in_record(self):
-        """When an OUT is cancelled, restore the most recent IN record as active."""
-        in_record = frappe.db.sql(
-            """
-            SELECT name FROM `tabPassport Movement`
-            WHERE employee = %(employee)s
-              AND movement_type = 'In'
-              AND is_active_record = 0
-              AND docstatus = 1
-            ORDER BY transaction_date DESC
-            LIMIT 1
-            """,
-            {"employee": self.employee},
-            as_dict=True,
-        )
-        if in_record:
-            frappe.db.set_value(
-                "Passport Movement", in_record[0].name, "is_active_record", 1
+        """When an OUT is cancelled, restore the IN record that this OUT deactivated."""
+        target = self.linked_in_record
+        if not target:
+            # Fallback for records created before this field was added
+            result = frappe.db.sql(
+                """
+                SELECT name FROM `tabPassport Movement`
+                WHERE employee = %(employee)s
+                  AND movement_type = 'In'
+                  AND is_active_record = 0
+                  AND docstatus = 1
+                ORDER BY transaction_date DESC
+                LIMIT 1
+                """,
+                {"employee": self.employee},
+                as_dict=True,
             )
+            if result:
+                target = result[0].name
+        if target:
+            frappe.db.set_value("Passport Movement", target, "is_active_record", 1)
 
 
 # ── Whitelisted API endpoints ─────────────────────────────────────────────────
@@ -159,15 +166,5 @@ def get_active_in_record(employee):
     )
 
 
-# ── Standalone event handlers (called from hooks.py doc_events) ───────────────
-
-def validate(doc, method=None):
-    doc.validate()
-
-
-def on_submit(doc, method=None):
-    doc.on_submit()
-
-
-def on_cancel(doc, method=None):
-    doc.on_cancel()
+# ── Whitelisted API endpoints only — lifecycle methods are called automatically
+# by Frappe via the Document class; no standalone wrappers needed here.

@@ -24,12 +24,14 @@ def send_overdue_passport_alerts():
         return
 
     hr_managers = frappe.get_all(
-        "Has Role", filters={"role": "HR Manager"}, fields=["parent"], pluck="parent"
+        "Has Role", filters={"role": "HR Manager", "parenttype": "User"}, fields=["parent"], pluck="parent"
     )
     pros = frappe.get_all(
-        "Has Role", filters={"role": "PRO"}, fields=["parent"], pluck="parent"
+        "Has Role", filters={"role": "PRO", "parenttype": "User"}, fields=["parent"], pluck="parent"
     )
     recipients = list(set(hr_managers + pros))
+    if not recipients:
+        return
 
     rows = "".join(
         f"<tr><td>{r.employee_name}</td><td>{r.passport_number}</td>"

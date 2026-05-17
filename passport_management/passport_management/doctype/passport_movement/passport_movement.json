@@ -32,7 +32,8 @@
   "attachment_section",
   "attach_document",
   "barcode",
-  "amended_from"
+  "amended_from",
+  "linked_in_record"
  ],
  "fields": [
   {
@@ -213,6 +214,15 @@
    "label": "Amended From",
    "no_copy": 1,
    "options": "Passport Movement",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "linked_in_record",
+   "fieldtype": "Data",
+   "label": "Linked IN Record",
+   "hidden": 1,
+   "no_copy": 1,
    "print_hide": 1,
    "read_only": 1
   }
