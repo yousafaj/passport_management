@@ -75,8 +75,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fetch_from": "employee.passport_number",
-   "fetch_if_empty": 0,
    "fieldname": "passport_number",
    "fieldtype": "Data",
    "in_list_view": 1,

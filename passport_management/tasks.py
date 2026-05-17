@@ -1,6 +1,8 @@
 import frappe
 from frappe.utils import today, add_days, formatdate, escape_html
 
+from passport_management.passport_management.utils import find_expiring_passports
+
 
 # Days to look back when running the daily expiry reminder, so a missed
 # scheduler day doesn't permanently skip a cohort.
@@ -89,17 +91,7 @@ def send_expiry_reminders():
         target_end = add_days(today(), days)
         target_start = add_days(target_end, -EXPIRY_LOOKBACK_DAYS)
 
-        expiring = frappe.db.sql(
-            """
-            SELECT e.name AS employee, e.employee_name, e.passport_number,
-                   e.passport_expiry_date, e.department
-            FROM `tabEmployee` e
-            WHERE e.passport_expiry_date BETWEEN %(start)s AND %(end)s
-              AND e.status = 'Active'
-            """,
-            {"start": target_start, "end": target_end},
-            as_dict=True,
-        )
+        expiring = list(find_expiring_passports(target_start, target_end))
         if not expiring:
             continue
 

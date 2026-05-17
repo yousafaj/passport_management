@@ -3,6 +3,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, getdate
 
+from passport_management.passport_management.utils import get_employee_passport_info
+
 
 class PassportMovement(Document):
 
@@ -11,6 +13,7 @@ class PassportMovement(Document):
     def validate(self):
         self._set_defaults()
         self._sync_naming_series()
+        self._populate_passport_number()
         self._validate_no_duplicate_active_in()
         self._validate_out_requires_active_in()
         self._validate_return_dates()
@@ -35,6 +38,17 @@ class PassportMovement(Document):
             self.transaction_date = today()
         if not self.received_by:
             self.received_by = frappe.session.user
+
+    def _populate_passport_number(self):
+        """Resolve passport_number from Employee — top-level field or
+        Certificates-style child table. Overwrites blank values only so a
+        manually-entered passport_number is not clobbered.
+        """
+        if self.passport_number or not self.employee:
+            return
+        info = get_employee_passport_info(self.employee)
+        if info.get("passport_number"):
+            self.passport_number = info["passport_number"]
 
     def _sync_naming_series(self):
         """Keep naming_series aligned with movement_type — only at creation time."""
@@ -163,6 +177,15 @@ class PassportMovement(Document):
 
 
 # ── Whitelisted API endpoints ─────────────────────────────────────────────────
+
+@frappe.whitelist()
+def get_employee_passport(employee):
+    """Resolve passport_number / passport_expiry_date for an employee from
+    either a top-level field or the Certificates-style child table."""
+    if not employee:
+        return {}
+    return get_employee_passport_info(employee)
+
 
 @frappe.whitelist()
 def get_active_in_record(employee):

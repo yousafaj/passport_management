@@ -25,13 +25,6 @@ scheduler_events = {
 # Fixtures — export these when running bench export-fixtures
 fixtures = [
     {
-        "doctype": "Custom Field",
-        "filters": [
-            ["dt", "=", "Employee"],
-            ["fieldname", "in", ["passport_number", "passport_expiry_date"]],
-        ],
-    },
-    {
         "doctype": "Role",
         "filters": [["name", "in", ["PRO"]]]
     },

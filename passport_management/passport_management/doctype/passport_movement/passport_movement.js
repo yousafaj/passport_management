@@ -53,18 +53,30 @@ frappe.ui.form.on('Passport Movement', {
             return;
         }
 
+        // Standard Employee fields (top-level on Employee doctype)
         frappe.db.get_value(
             'Employee',
             frm.doc.employee,
-            ['employee_name', 'passport_number', 'department', 'designation'],
+            ['employee_name', 'department', 'designation'],
             r => {
                 if (!r) return;
                 frm.set_value('employee_name', r.employee_name);
-                frm.set_value('passport_number', r.passport_number || '');
-                frm.set_value('department',      r.department);
-                frm.set_value('designation',     r.designation);
+                frm.set_value('department',    r.department);
+                frm.set_value('designation',   r.designation);
             }
         );
+
+        // Passport number: resolved server-side because it may live in a
+        // Certificates child table, not as a top-level Employee field.
+        frappe.call({
+            method: 'passport_management.passport_management.doctype.passport_movement.passport_movement.get_employee_passport',
+            args: { employee: frm.doc.employee },
+            callback(r) {
+                if (r && r.message) {
+                    frm.set_value('passport_number', r.message.passport_number || '');
+                }
+            },
+        });
 
         // Check for active IN when movement_type is Out
         if (frm.doc.movement_type === 'Out') {
