@@ -1,5 +1,13 @@
 import frappe
-from frappe.utils import today, add_days, formatdate
+from frappe.utils import today, add_days, formatdate, escape_html
+
+
+# Days to look back when running the daily expiry reminder, so a missed
+# scheduler day doesn't permanently skip a cohort.
+EXPIRY_LOOKBACK_DAYS = 2
+
+# Window for deduplicating expiry reminders against the Communication log.
+EXPIRY_DEDUP_DAYS = 7
 
 
 def send_overdue_passport_alerts():
@@ -34,9 +42,16 @@ def send_overdue_passport_alerts():
         return
 
     rows = "".join(
-        f"<tr><td>{r.employee_name}</td><td>{r.passport_number}</td>"
-        f"<td>{r.department}</td><td>{formatdate(r.expected_return_date)}</td>"
-        f"<td><a href='/app/passport-movement/{r.name}'>{r.name}</a></td></tr>"
+        "<tr><td>{name}</td><td>{passport}</td>"
+        "<td>{dept}</td><td>{expected}</td>"
+        "<td><a href='/app/passport-movement/{record_href}'>{record}</a></td></tr>".format(
+            name=escape_html(r.employee_name or ""),
+            passport=escape_html(r.passport_number or ""),
+            dept=escape_html(r.department or ""),
+            expected=escape_html(formatdate(r.expected_return_date)),
+            record_href=escape_html(r.name),
+            record=escape_html(r.name),
+        )
         for r in overdue
     )
 
@@ -62,35 +77,59 @@ def send_overdue_passport_alerts():
 
 
 def send_expiry_reminders():
-    """Daily: warn about passports expiring within 90 days."""
+    """Daily: warn employees about passports expiring at 90 / 60 / 30 day thresholds.
+
+    Uses a small lookback window so a missed scheduler day still catches the
+    cohort the next time it runs. Deduplicates against the Communication log
+    so a given employee isn't reminded twice for the same threshold within a
+    week.
+    """
     alert_days = [90, 60, 30]
     for days in alert_days:
-        target_date = add_days(today(), days)
+        target_end = add_days(today(), days)
+        target_start = add_days(target_end, -EXPIRY_LOOKBACK_DAYS)
+
         expiring = frappe.db.sql(
             """
             SELECT e.name AS employee, e.employee_name, e.passport_number,
                    e.passport_expiry_date, e.department
             FROM `tabEmployee` e
-            WHERE e.passport_expiry_date = %(target)s
+            WHERE e.passport_expiry_date BETWEEN %(start)s AND %(end)s
               AND e.status = 'Active'
             """,
-            {"target": target_date},
+            {"start": target_start, "end": target_end},
             as_dict=True,
         )
         if not expiring:
             continue
 
+        subject = f"Passport Expiry Reminder — {days} days remaining"
+        dedup_since = add_days(today(), -EXPIRY_DEDUP_DAYS)
+
         for emp in expiring:
             user_id = frappe.db.get_value("Employee", emp.employee, "user_id")
-            if user_id:
-                frappe.sendmail(
-                    recipients=[user_id],
-                    subject=f"Passport Expiry Reminder — {days} days remaining",
-                    message=(
-                        f"<p>Dear {emp.employee_name},</p>"
-                        f"<p>Your passport <b>{emp.passport_number}</b> expires on "
-                        f"<b>{formatdate(emp.passport_expiry_date)}</b> "
-                        f"({days} days from today). Please initiate renewal.</p>"
-                    ),
-                    delayed=False,
-                )
+            if not user_id:
+                continue
+
+            already_sent = frappe.db.exists(
+                "Communication",
+                {
+                    "recipients": ["like", f"%{user_id}%"],
+                    "subject": subject,
+                    "creation": [">=", dedup_since],
+                },
+            )
+            if already_sent:
+                continue
+
+            frappe.sendmail(
+                recipients=[user_id],
+                subject=subject,
+                message=(
+                    f"<p>Dear {escape_html(emp.employee_name or '')},</p>"
+                    f"<p>Your passport <b>{escape_html(emp.passport_number or '')}</b> expires on "
+                    f"<b>{escape_html(formatdate(emp.passport_expiry_date))}</b> "
+                    f"({days} days from today). Please initiate renewal.</p>"
+                ),
+                delayed=False,
+            )

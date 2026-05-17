@@ -8,6 +8,10 @@ app_license = "MIT"
 # App icon shown in the Desk
 app_logo_url = "/assets/passport_management/images/passport_logo.svg"
 
+# Installation / migration hooks — ensure required custom fields exist
+after_install = "passport_management.install.after_install"
+after_migrate = "passport_management.install.after_migrate"
+
 # Scheduled Tasks
 scheduler_events = {
     "daily": [
@@ -22,7 +26,10 @@ scheduler_events = {
 fixtures = [
     {
         "doctype": "Custom Field",
-        "filters": [["dt", "=", "Employee"], ["fieldname", "=", "passport_number"]]
+        "filters": [
+            ["dt", "=", "Employee"],
+            ["fieldname", "in", ["passport_number", "passport_expiry_date"]],
+        ],
     },
     {
         "doctype": "Role",

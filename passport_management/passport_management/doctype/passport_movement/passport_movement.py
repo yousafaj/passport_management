@@ -17,17 +17,14 @@ class PassportMovement(Document):
 
     def on_submit(self):
         if self.movement_type == "In":
-            frappe.db.set_value("Passport Movement", self.name, "is_active_record", 1)
-            self.is_active_record = 1
+            self.db_set("is_active_record", 1)
         elif self.movement_type == "Out":
             self._deactivate_corresponding_in_record()
-            frappe.db.set_value("Passport Movement", self.name, "actual_return_date", today())
-            self.actual_return_date = today()
+            self.db_set("actual_return_date", today())
 
     def on_cancel(self):
         if self.movement_type == "In":
-            frappe.db.set_value("Passport Movement", self.name, "is_active_record", 0)
-            self.is_active_record = 0
+            self.db_set("is_active_record", 0)
         elif self.movement_type == "Out":
             self._reactivate_in_record()
 
@@ -48,7 +45,13 @@ class PassportMovement(Document):
             self.naming_series = series_map[self.movement_type]
 
     def _validate_no_duplicate_active_in(self):
-        """Prevent a second active IN record for the same employee."""
+        """Prevent a second active IN record for the same employee.
+
+        Blocks both submitted-active records AND other in-flight drafts
+        (docstatus 0) for the same employee — otherwise two concurrent draft
+        INs could both pass validation and both set is_active_record = 1 on
+        submit, defeating the constraint.
+        """
         if self.movement_type != "In":
             return
         existing = frappe.db.get_value(
@@ -56,20 +59,27 @@ class PassportMovement(Document):
             {
                 "employee": self.employee,
                 "movement_type": "In",
-                "is_active_record": 1,
-                "docstatus": 1,
-                "name": ["!=", self.name],
+                "docstatus": ["in", [0, 1]],
+                "name": ["!=", self.name or ""],
             },
             "name",
+            order_by="docstatus desc, creation asc",
         )
-        if existing:
-            frappe.throw(
-                _(
-                    "An active Passport IN record {0} already exists for {1}. "
-                    "Please process an OUT movement before creating a new IN record."
-                ).format(frappe.bold(existing), frappe.bold(self.employee_name)),
-                title=_("Duplicate Active Record"),
-            )
+        if not existing:
+            return
+        # If existing is a submitted record, it must still be active to block
+        existing_doc = frappe.db.get_value(
+            "Passport Movement", existing, ["docstatus", "is_active_record"], as_dict=True
+        )
+        if existing_doc.docstatus == 1 and not existing_doc.is_active_record:
+            return
+        frappe.throw(
+            _(
+                "An IN record {0} already exists for {1} (draft or active). "
+                "Please complete or cancel it before creating another."
+            ).format(frappe.bold(existing), frappe.bold(self.employee_name)),
+            title=_("Duplicate Active Record"),
+        )
 
     def _validate_out_requires_active_in(self):
         """An OUT can only be created when an active IN record exists."""
@@ -126,8 +136,7 @@ class PassportMovement(Document):
         )
         if active_in:
             frappe.db.set_value("Passport Movement", active_in, "is_active_record", 0)
-            frappe.db.set_value("Passport Movement", self.name, "linked_in_record", active_in)
-            self.linked_in_record = active_in
+            self.db_set("linked_in_record", active_in)
 
     def _reactivate_in_record(self):
         """When an OUT is cancelled, restore the IN record that this OUT deactivated."""
