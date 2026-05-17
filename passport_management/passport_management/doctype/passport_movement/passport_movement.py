@@ -41,14 +41,20 @@ class PassportMovement(Document):
 
     def _populate_passport_number(self):
         """Resolve passport_number from Employee — top-level field or
-        Certificates-style child table. Overwrites blank values only so a
-        manually-entered passport_number is not clobbered.
+        Certificates-style child table. Always re-resolves when employee is
+        set so changing the linked Employee on a draft updates the value
+        (the field is read-only in the UI, so there's no user input to
+        protect). Leaves an existing value untouched only if the resolver
+        returns nothing, so a passport_number set via API/script survives a
+        re-save against an employee whose record temporarily lacks the
+        passport row.
         """
-        if self.passport_number or not self.employee:
+        if not self.employee:
             return
         info = get_employee_passport_info(self.employee)
-        if info.get("passport_number"):
-            self.passport_number = info["passport_number"]
+        resolved = info.get("passport_number")
+        if resolved:
+            self.passport_number = resolved
 
     def _sync_naming_series(self):
         """Keep naming_series aligned with movement_type — only at creation time."""
@@ -181,9 +187,16 @@ class PassportMovement(Document):
 @frappe.whitelist()
 def get_employee_passport(employee):
     """Resolve passport_number / passport_expiry_date for an employee from
-    either a top-level field or the Certificates-style child table."""
+    either a top-level field or the Certificates-style child table.
+
+    The helper uses raw SQL (it has to, because the source child table is
+    discovered at runtime), which bypasses Frappe's row-level permission
+    system. Enforce the Employee read permission here to keep passport
+    numbers behind the same access control as the Employee record itself.
+    """
     if not employee:
         return {}
+    frappe.has_permission("Employee", "read", employee, throw=True)
     return get_employee_passport_info(employee)
 
 

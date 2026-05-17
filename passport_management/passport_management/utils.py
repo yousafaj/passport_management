@@ -12,8 +12,10 @@ import frappe
 
 # Heuristic keywords used to identify the right fields in any child table
 # attached to Employee. Match is case-insensitive on label OR fieldname.
+# Keep these specific enough to avoid false positives — e.g. "no" alone
+# would match nominee_name, notice_period, monthly_no, etc.
 _NAME_KEYWORDS = ("certification", "certificate", "document", "identification")
-_REF_KEYWORDS = ("reference", "number", "no")
+_REF_KEYWORDS = ("reference", "number")
 _EXPIRY_KEYWORDS = ("expiry", "expir")
 _PASSPORT_KEYWORDS = ("passport",)
 
